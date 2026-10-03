@@ -835,6 +835,28 @@ test("a raw __proto__ input key stays skipped in loose mode", () => {
   expect(Object.prototype.hasOwnProperty.call(parsed, "__proto__")).toBe(false);
 });
 
+test("an own __proto__ key is checked against the key schema", async () => {
+  const locale = z.string().refine((l) => ["fr", "de"].includes(l));
+  const schema = z.record(locale, z.string());
+  const data = JSON.parse('{"__proto__": "x", "fr": "y"}');
+
+  for (const result of [schema.safeParse(data), await schema.safeParseAsync(data)]) {
+    expect(result.success).toBe(false);
+    expect(result.error!.issues).toMatchObject([{ code: "invalid_key", origin: "record", path: ["__proto__"] }]);
+  }
+
+  const accepted: any = z.record(z.string(), z.string()).parse(data);
+  expect(Object.getPrototypeOf(accepted)).toBe(Object.prototype);
+  expect(accepted).toEqual({ fr: "y" });
+});
+
+test("an own __proto__ key outside a partialRecord's key set is unrecognized", () => {
+  const result = z.partialRecord(z.enum(["fr"]), z.string()).safeParse(JSON.parse('{"__proto__": "x"}'));
+
+  expect(result.success).toBe(false);
+  expect(result.error!.issues).toMatchObject([{ code: "unrecognized_keys", keys: ["__proto__"] }]);
+});
+
 test("partialRecord strips a declared __proto__ key", () => {
   const schema = z.partialRecord(z.enum(["__proto__", "b"]), z.string());
   const parsed: any = schema.parse(Object.fromEntries([["__proto__", "declared"]]));

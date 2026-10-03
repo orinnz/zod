@@ -2012,6 +2012,14 @@ function generateRecordCheck(doc: Doc, ctx: CompileContext, schema: SomeType, ac
     const numericConst = addConstant(ctx, regexes.number);
     const outKeyVar = newVar(ctx);
 
+    // emitOwnKeys skips an own __proto__, but the runtime still validates it as a key (and never writes it), so a strict record must fail on a bad one
+    if (!isLoose) {
+      const propIsEnumerableConst = addConstant(ctx, Object.prototype.propertyIsEnumerable);
+      doc.write(
+        `if (${propIsEnumerableConst}.call(${accessor}, "__proto__") && ${keyFast}("__proto__") === INVALID) return INVALID;`
+      );
+    }
+
     // the body runs once per string key and once per symbol key, since a key schema can accept symbols
     emitOwnKeys(doc, ctx, accessor, kVar, (d) => {
       d.write(`let ${outKeyVar} = ${keyFast}(${kVar});`);
